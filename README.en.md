@@ -1,10 +1,18 @@
-[![npm](https://img.shields.io/npm/v/@zzxxxxxx/dsh-dcp.svg)](https://www.npmjs.com/package/@zzxxxxxx/dsh-dcp)
+<div align="center">
 
-**English** | [中文](README.md)
+<img src="assets/icon.svg" alt="dsh-dcp" width="84" height="84">
 
 # dsh-dcp
 
-Dynamic context pruning for the [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness): history the task no longer needs is folded into a summary the model writes itself, and repeated tool output is rewritten automatically.
+**Dynamic context pruning for the DeepSeek Harness — let the model tidy up after itself.**
+
+[![npm](https://img.shields.io/npm/v/@zzxxxxxx/dsh-dcp.svg)](https://www.npmjs.com/package/@zzxxxxxx/dsh-dcp)
+[![License: AGPL-3.0](https://img.shields.io/badge/License-AGPL--3.0-blue.svg)](LICENSE)
+[![DeepSeek Harness](https://img.shields.io/badge/DeepSeek%20Harness-%E2%89%A5%200.2.0--rc.1-6E56CF)](https://github.com/deepseek-ai/deepseek-harness)
+
+**English** | [中文](README.md)
+
+</div>
 
 ## Overview
 

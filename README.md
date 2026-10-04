@@ -1,10 +1,18 @@
-[![npm](https://img.shields.io/npm/v/@zzxxxxxx/dsh-dcp.svg)](https://www.npmjs.com/package/@zzxxxxxx/dsh-dcp)
+<div align="center">
 
-[English](README.en.md) | **中文**
+<img src="assets/icon.svg" alt="dsh-dcp" width="84" height="84">
 
 # dsh-dcp
 
-[DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) 的动态上下文裁剪插件：把不再需要的对话历史交给模型自己写成摘要收起来，并自动改写重复的工具输出。
+**DeepSeek Harness 的动态上下文裁剪 —— 把历史交给模型自己收起来。**
+
+[![npm](https://img.shields.io/npm/v/@zzxxxxxx/dsh-dcp.svg)](https://www.npmjs.com/package/@zzxxxxxx/dsh-dcp)
+[![License: AGPL-3.0](https://img.shields.io/badge/License-AGPL--3.0-blue.svg)](LICENSE)
+[![DeepSeek Harness](https://img.shields.io/badge/DeepSeek%20Harness-%E2%89%A5%200.2.0--rc.1-6E56CF)](https://github.com/deepseek-ai/deepseek-harness)
+
+[English](README.en.md) | **中文**
+
+</div>
 
 ## 简介
 
