@@ -1,5 +1,13 @@
 window.__ModuleLoader__.load({
-  id: 'dsh-dcp',
+  // The envelope's id is the PACKAGE name, not the short entry id. The host's
+  // client-modules half locates this bundle through the loader row's name and
+  // then looks the registration up under exactly that string, so `dsh-dcp`
+  // here made the browser boot refuse the plugin — `client-modules: could not
+  // load "@zzxxxxxx/dsh-dcp": ... loaded without registering
+  // "@zzxxxxxx/dsh-dcp"` — while the server half stayed up and green. The entry
+  // id is still `dsh-dcp`; that is a different namespace, used by the settings
+  // form and the patch layer.
+  id: '@zzxxxxxx/dsh-dcp',
   /**
    * Browser half of dsh-dcp.
    *

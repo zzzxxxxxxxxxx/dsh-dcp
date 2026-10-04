@@ -24,6 +24,16 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 
 const source = readFileSync(new URL('../src/client/index.js', import.meta.url), 'utf8')
 
+/**
+ * The package name the Host resolves this bundle under.
+ *
+ * client-modules finds the bundle through the loader row's name and then looks
+ * the registration up under exactly that string, so the envelope's `id` is not
+ * a free label. Read from the manifest rather than written twice: a rename that
+ * misses the envelope is the failure this guards.
+ */
+const packageName = (JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8')) as { name: string }).name
+
 /** One registration the bundle made. */
 interface Registration {
   slot: string
@@ -286,11 +296,14 @@ function stubContext(registrations: Registration[], scope: ReturnType<typeof for
 /** A complete-enough document for a mount that never touches the DOM. */
 const STUB_DOCUMENT = { body: {}, addEventListener() {}, removeEventListener() {} }
 
+/** The id the envelope most recently evaluated registered under. */
+let registeredId: string | undefined
+
 /** Evaluate the envelope against the stub module table; returns the plugin object. */
 function evaluatePlugin(documentStub: unknown): { inject: string[]; apply: (ctx: unknown) => void } {
   let plugin: { inject: string[]; apply: (ctx: unknown) => void } | undefined
   const sandbox: Record<string, unknown> = {
-    window: { __ModuleLoader__: { load: (record: { factory: (require: (name: string) => unknown) => unknown }) => { plugin = record.factory((name: string) => stubs()[name]) as typeof plugin } } },
+    window: { __ModuleLoader__: { load: (record: { id: string; factory: (require: (name: string) => unknown) => unknown }) => { registeredId = record.id; plugin = record.factory((name: string) => stubs()[name]) as typeof plugin } } },
     console,
     document: documentStub,
   }
@@ -545,6 +558,17 @@ function cordisLoad(ctx: Context, plugin: { inject: string[]; apply: (ctx: unkno
 }
 
 describe('client bundle at runtime', () => {
+  it('registers under the package name the Host resolves', () => {
+    // The boot loads the chunk addressed by the loader row's package name and
+    // then requires that the same string was registered. Registering the short
+    // entry id instead loads the code and fails the page:
+    // `client-modules: could not load "@zzxxxxxx/dsh-dcp": ... loaded without
+    // registering "@zzxxxxxx/dsh-dcp"`. Nothing else here can catch it — the
+    // stub used to read `factory` and drop `id` on the floor.
+    evaluatePlugin(STUB_DOCUMENT)
+    expect(registeredId).toBe(packageName)
+  })
+
   it('registers the composer readout and the settings section', () => {
     expect(mount().map((entry) => entry.slot).sort()).toEqual(['conversation.composer.dock', 'settings.section'])
   })
