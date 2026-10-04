@@ -1,6 +1,6 @@
 {
   "name": "@zzxxxxxx/dsh-dcp",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Dynamic context pruning for DeepSeek Harness — model-driven compaction and duplicate-output pruning. | DeepSeek Harness 的动态上下文裁剪：模型驱动的压缩与重复工具输出去重",
   "icon": "./assets/icon.svg",
   "keywords": [
