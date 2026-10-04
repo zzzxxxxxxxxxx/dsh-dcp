@@ -1,3 +1,5 @@
+[![npm](https://img.shields.io/npm/v/@zzxxxxxx/dsh-dcp.svg)](https://www.npmjs.com/package/@zzxxxxxx/dsh-dcp)
+
 [English](README.en.md) | **中文**
 
 # dsh-dcp
