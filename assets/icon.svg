@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="Dynamic Context Pruning">
+  <!-- Literal colours, never `currentColor`: the host renders this file through
+       `<img src="data:...">` (ui-plugin-manager/lib/client.js:1921-1932), where
+       the SVG is its own document and `currentColor` resolves to the UA's
+       `canvastext` rather than any theme token. Every icon the host ships does
+       the same. This slate reads against both the light and the dark card. -->
+  <rect x="6" y="10" width="52" height="9" rx="4" fill="#5b6470" opacity="0.85"/>
+  <rect x="6" y="23" width="52" height="9" rx="4" fill="#5b6470" opacity="0.55"/>
+  <rect x="6" y="36" width="30" height="9" rx="4" fill="#5b6470" opacity="0.3"/>
+  <path d="M40 40.5h18" stroke="#5b6470" stroke-width="4" stroke-linecap="round"/>
+  <path d="M52 34l6 6.5-6 6.5" fill="none" stroke="#5b6470" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>

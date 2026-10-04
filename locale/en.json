@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Dynamic Context Pruning",
+    "description": "Model-driven compaction and duplicate-output pruning for long sessions."
+  }
+}

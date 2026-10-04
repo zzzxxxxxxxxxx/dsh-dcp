@@ -1,0 +1,26 @@
+node_modules/
+lib/
+*.log
+.DS_Store
+
+# Transient build staging (scripts/build.mjs): holds lib-staging/ and the
+# lib-previous/ backup for the duration of one build, beside lib/ so the swap
+# stays a same-filesystem rename.
+.dsh-dcp-build/
+
+# Local repair workspace: holds real session-log backups (multi-MB .zstd).
+# Anything committed here is unrecoverable — never `git add -A` over it.
+.dsh-repair/
+
+# Read-only audit output (reports + scratch copies of the tree).
+audit/
+
+# npm cache redirect, used when $HOME/.npm is not writable.
+.npm-cache/
+
+# Local upstream checkouts, read-only reference material: three full clones
+# (deepseek-harness, opencode, opencode-dynamic-context-pruning) totalling
+# ~425 MB, each with its own `.git`. Committing them would embed foreign
+# repositories and ship other projects' code; the port's upstream is linked
+# from README.md instead.
+references/

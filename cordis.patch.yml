@@ -1,0 +1,17 @@
+# dsh-dcp bundle patch.
+#
+# One row: `insert` mounts the plugin itself. The row name MUST equal the
+# package name, because the client-modules half resolves
+# `require.resolve('<row-name>/package.json')` to find the browser bundle.
+#
+# DCP deliberately does NOT touch the host's `command-compact` row. Its own
+# command is `/dcp-compact`, so both can coexist: the host keeps `/compact`, and
+# DCP adds a second, separately named entry point. Taking the host name over was
+# tried and abandoned — in the web profile the host mounts `command-compact`
+# once per agent from that agent's preset (inside an isolated `compaction`
+# group), so a same-name registration here is either a hard duplicate error
+# (registering inside the agent scope) or silently shadowed (from the global
+# scope), and a global-layer patch cannot reach the preset's nested row.
+- insert:
+    - id: dsh-dcp
+      name: '@zzxxxxxx/dsh-dcp'
