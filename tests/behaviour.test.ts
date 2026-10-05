@@ -406,7 +406,7 @@ describe('panel projection view', () => {
     expect(dcpWireView(other)).toBe(second)
   })
 
-  it('counts absorbed blocks, not blocks the user retired', () => {
+  it('counts absorbed blocks while the newer block stays active', () => {
     const block = (id: string, over: Partial<DcpState['blocks'][number]>): DcpState['blocks'][number] => ({
       id,
       compactionId: `dcp-${id}`,
@@ -421,12 +421,13 @@ describe('panel projection view', () => {
     })
     const state: DcpState = {
       ...initialDcpState(),
-      blocks: [block('b1', { consumedBy: 'b2' }), block('b2', { deactivatedByUser: true, rehydratedSeq: 8 })],
+      blocks: [block('b1', { consumedBy: 'b2' }), block('b2', {})],
     }
     const view = dcpWireView(state)
-    // Neither is active, but only one was absorbed; the other left because the
-    // user asked for its content back.
-    expect(view.blocks).toHaveLength(0)
+    // Only the absorbed block leaves the active list, and the two are counted
+    // separately: absorbed is not a synonym for "no longer active".
+    expect(view.blocks).toHaveLength(1)
+    expect(view.blocks[0]?.id).toBe('b2')
     expect(view.absorbed).toBe(1)
   })
 })

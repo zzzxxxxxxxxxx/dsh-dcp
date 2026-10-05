@@ -2,8 +2,10 @@
  * Prompt texts and the optional on-disk override store.
  *
  * The built-in texts started from the opencode-dcp prompts and have been edited
- * here since; `experimental.customPrompts` adds a directory the user can edit
- * without touching the plugin:
+ * here since, to the point of being rewritten around this plugin's own tool
+ * vocabulary; the attribution and the exact scope of that adaptation are
+ * recorded in the repository's `NOTICE` file. `experimental.customPrompts` adds
+ * a directory the user can edit without touching the plugin:
  *
  *     $DSH_HOME/dcp-prompts/overrides/<name>.md   (wins)
  *     $DSH_HOME/dcp-prompts/defaults/<name>.md    (seeded, informational)

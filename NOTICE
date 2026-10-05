@@ -1,0 +1,40 @@
+dsh-dcp
+Copyright (c) 2026 zzzxxxxxxxxxx
+
+Licensed under the GNU Affero General Public License, version 3 or later
+(see LICENSE).
+
+--- Third-party attribution -------------------------------------------------
+
+This project's design and product behaviour were inspired by, and its built-in
+prompt texts were initially adapted from:
+
+    OpenCode Dynamic Context Pruning (opencode-dcp)
+    https://github.com/Opencode-DCP/opencode-dynamic-context-pruning
+    npm: @tarquinen/opencode-dcp
+    Copyright (c) tarquinen and contributors
+    Licensed under the GNU Affero General Public License, version 3 or later.
+
+What that adaptation covers, precisely:
+
+  * Design and behaviour (context compaction, duplicate-output pruning,
+    protected content, nudges, manual commands) follow the ideas demonstrated
+    by that project. Ideas and methods are not themselves copyrightable, but the
+    credit is recorded here deliberately.
+
+  * The built-in prompt texts under `src/prompts/` were **started from that
+    project's prompts and have been edited here since** — they have been
+    rewritten around this plugin's own tool vocabulary (`compact`,
+    `compact_targets`, `recall`, `bN` block handles) and the DeepSeek Harness
+    message model. The upstream prompt files are `.md` assets under
+    `lib/prompts/`; the texts here are not copies of them.
+
+  * All remaining code, host integration, protocol handling and client UI were
+    written for DeepSeek Harness and are original to this project.
+
+Both projects are licensed AGPL-3.0-or-later, so the licences are compatible;
+this notice exists to satisfy the attribution and "state your changes"
+requirements of that licence, not to resolve a licence conflict.
+
+If you believe any material here is attributed incorrectly, please open an
+issue at https://github.com/zzzxxxxxxxxxx/dsh-dcp/issues.

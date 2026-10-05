@@ -154,45 +154,6 @@ function compileGlob(glob: string): readonly GlobAtom[] {
   return atoms
 }
 
-/** Regex metacharacters that a literal atom must escape when rendered. */
-const REGEX_ESCAPE = /[.+^${}()|[\]\\]/g
-
-/**
- * Glob-to-regexp translation supporting `*`, `?`, and `**​/`.
- *
- * Kept as the printable form of a compiled glob (diagnostics and probes render
- * `.source`), NOT as the matcher: a translated `RegExp` is exactly the
- * backtracking bomb {@link matchesAny} refuses to run, so nothing in the plugin
- * tests values with this. Consecutive wildcard atoms are collapsed first, so
- * the rendered source is also the shortest equivalent one.
- *
- * @param glob - the pattern.
- * @returns an anchored regular expression describing the same language.
- */
-export function globToRegExp(glob: string): RegExp {
-  let out = ''
-  for (const atom of compileGlob(glob)) {
-    switch (atom.kind) {
-      case 'literal':
-        out += atom.value.replace(REGEX_ESCAPE, '\\$&')
-        break
-      case 'star':
-        out += '[^/]*'
-        break
-      case 'globstar':
-        out += '.*'
-        break
-      case 'dirprefix':
-        out += '(?:.*/)?'
-        break
-      case 'question':
-        out += '[^/]'
-        break
-    }
-  }
-  return new RegExp(`^${out}$`)
-}
-
 /**
  * Ceilings for one match probe.
  *

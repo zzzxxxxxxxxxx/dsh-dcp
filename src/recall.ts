@@ -18,7 +18,7 @@
 import type { ContentBlock } from '@deepseek-ai/dsh-llm'
 import type { Session, SessionEvent } from '@deepseek-ai/dsh-session'
 import type { DcpBlockState, DcpState } from './types.ts'
-import { contentOf, eventAt, isOnSurface } from './surface.ts'
+import { contentOf, eventAt } from './surface.ts'
 
 /** How deep a nested-summary chain is followed before giving up. */
 const NESTING_DEPTH_LIMIT = 8
@@ -146,11 +146,17 @@ function nonTextNote(blocks: readonly ContentBlock[]): string {
 }
 
 /**
- * Walk a block's original content, resolving nested summaries transitively.
+ * Walk a set of shadowed surface nodes back to their original content,
+ * resolving nested summaries transitively.
+ *
+ * Takes the shadowed sequences rather than a block so the same walk serves a
+ * compaction block and a single pruned node: both remove content by replacing a
+ * surface node, and {@link originalAt} recovers either one the same way.
  *
  * @param session - session holding the log.
  * @param state - derived DCP state.
- * @param block - the block to expand.
+ * @param shadowed - surface sequences whose originals to collect.
+ * @param selfId - the owner's block id, so a summary spanning itself is not re-entered.
  * @param depth - recursion guard, so a malformed log cannot loop.
  * @param raw - the log indexed by sequence, built once per recall.
  * @returns the original nodes in surface order.
@@ -158,7 +164,8 @@ function nonTextNote(blocks: readonly ContentBlock[]): string {
 function collect(
   session: Session,
   state: DcpState,
-  block: DcpBlockState,
+  shadowed: readonly number[],
+  selfId: string,
   depth = 0,
   raw?: ReadonlyMap<number, SessionEvent>,
 ): { nodes: RecalledNode[]; truncated: boolean } {
@@ -174,12 +181,12 @@ function collect(
   // (shadowed nodes × log length).
   const index = raw ?? new Map(session.snapshotEvents().map((event) => [event.seq as number, event]))
 
-  for (const seq of block.shadowed) {
+  for (const seq of shadowed) {
     const nested = bySeq.get(seq)
-    if (nested !== undefined && nested.id !== block.id) {
+    if (nested !== undefined && nested.id !== selfId) {
       // A summary node inside the span: its content is what THAT block
       // removed, which is the detail a reader is after.
-      const inner = collect(session, state, nested, depth + 1, index)
+      const inner = collect(session, state, nested.shadowed, nested.id, depth + 1, index)
       out.push(...inner.nodes)
       if (inner.truncated) truncated = true
       continue
@@ -238,12 +245,73 @@ export function recallBlock(
   query?: string,
   offset = 0,
 ): RecallResult {
-  const collected = collect(session, state, block)
+  const collected = collect(session, state, block.shadowed, block.id)
   const nodes = collected.nodes
   if (nodes.length === 0) {
     return { found: false, text: `No recoverable content for ${block.id}.`, chars: 0, truncated: false, nodes: 0 }
   }
+  const header = `${block.id} · original content of seq ${block.spanStart}..${block.spanEnd}`
+    + `${block.topic === undefined ? '' : ` · ${block.topic}`}`
+  return renderNodes(header, block.id, nodes, collected.truncated, query, offset)
+}
 
+/**
+ * Read back the original content of one pruned node.
+ *
+ * Deduplication replaces a repeated tool result with a placeholder, and the
+ * strategies have no recall path of their own: the node is not inside any
+ * compaction block, so `recall <bN>` could not reach it. The original is still
+ * in the log and `originalAt` walks any replacement chain, so the same readback
+ * serves a pruned node — it only needed a handle to be asked for.
+ *
+ * The handle is the node's own surface sequence, the same `n<seq>` shape
+ * `compact_targets` lists, so the model can name a node it can already see.
+ *
+ * @param session - session holding the log.
+ * @param state - derived DCP state.
+ * @param seq - surface sequence of the pruned node.
+ * @param query - optional case-insensitive line filter.
+ * @param offset - character offset to start from, for a paged body.
+ * @returns the rendered body and its accounting.
+ */
+export function recallPruned(
+  session: Session,
+  state: DcpState,
+  seq: number,
+  query?: string,
+  offset = 0,
+): RecallResult {
+  const subject = `n${seq}`
+  const collected = collect(session, state, [seq], subject)
+  const nodes = collected.nodes
+  if (nodes.length === 0) {
+    return { found: false, text: `No recoverable content for ${subject}.`, chars: 0, truncated: false, nodes: 0 }
+  }
+  return renderNodes(`${subject} · original content of a pruned node`, subject, nodes, collected.truncated, query, offset)
+}
+
+/**
+ * Render collected originals into one paged answer.
+ *
+ * Shared by the block and pruned-node paths: both produce the same node list and
+ * differ only in the header naming what was read.
+ *
+ * @param header - the line naming what this answer covers.
+ * @param subject - how the caller named it, for the "no match" answer.
+ * @param nodes - the collected originals in surface order.
+ * @param deep - whether a replacement chain was too deep to finish walking.
+ * @param query - optional case-insensitive line filter.
+ * @param offset - character offset to start from.
+ * @returns the rendered body and its accounting.
+ */
+function renderNodes(
+  header: string,
+  subject: string,
+  nodes: readonly RecalledNode[],
+  deep: boolean,
+  query?: string,
+  offset = 0,
+): RecallResult {
   const trimmed = query?.trim() ?? ''
   let rendered: string
   if (trimmed.length > 0) {
@@ -256,7 +324,7 @@ export function recallBlock(
     if (matches.length === 0) {
       return {
         found: false,
-        text: `${block.id} contains no line matching ${JSON.stringify(query)}.`,
+        text: `${subject} contains no line matching ${JSON.stringify(query)}.`,
         chars: 0,
         truncated: false,
         nodes: nodes.length,
@@ -271,9 +339,7 @@ export function recallBlock(
   // trimmed test the filter does: `query: ""` and `query: "  "` both leave the
   // body unfiltered, and a header claiming `filtered by ""` over an unfiltered
   // body reads as "these are the only matches".
-  const header = `${block.id} · original content of seq ${block.spanStart}..${block.spanEnd}`
-    + `${block.topic === undefined ? '' : ` · ${block.topic}`}`
-    + `${trimmed.length === 0 ? '' : ` · filtered by ${JSON.stringify(query)}`}\n\n`
+  const described = `${header}${trimmed.length === 0 ? '' : ` · filtered by ${JSON.stringify(query)}`}\n\n`
 
   // `offset` walks the body in pages. Without it, a truncated answer was a dead
   // end: the reader could see there was more and had no way to ask for it.
@@ -293,22 +359,9 @@ export function recallBlock(
   // Ways to be incomplete, and the caller must be able to tell them apart: a page
   // past the end, hitting the character cap, or a replacement chain too deep to
   // walk. All of them used to look like a complete answer.
-  const deep = collected.truncated
+  const deepNote = deep
     ? '\n\n[… truncated; the summaries nest deeper than this tool will follow …]'
     : ''
-  const text = `${header}${body}${deep}`
-  return { found: true, text, chars: text.length, truncated: past || capped || collected.truncated, nodes: nodes.length }
-}
-
-/**
- * Describe one block for a listing line.
- * @param block - the block.
- * @param session - session the block lives in.
- * @returns a one-line summary.
- */
-export function describeBlock(block: DcpBlockState, session: Session): string {
-  const state = block.consumedBy === undefined ? '' : ` (absorbed by ${block.consumedBy})`
-  const live = isOnSurface(session, block.seq) ? '' : ' (no longer in the conversation)'
-  const topic = block.topic === undefined ? '' : ` · ${block.topic}`
-  return `${block.id} · seq ${block.spanStart}..${block.spanEnd} · ${block.shadowed.length} nodes${topic}${state}${live}`
+  const text = `${described}${body}${deepNote}`
+  return { found: true, text, chars: text.length, truncated: past || capped || deep, nodes: nodes.length }
 }

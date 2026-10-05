@@ -139,41 +139,4 @@ export function isOnSurface(session: Session, sequence: number): boolean {
   return session.surface.nodes.includes(seq(sequence))
 }
 
-/**
- * The index of one sequence within the current surface.
- * @param nodes - a surface snapshot.
- * @param sequence - candidate sequence.
- * @returns the index, or `-1` when absent.
- */
-export function indexOfSeq(nodes: readonly number[], sequence: number): number {
-  return nodes.indexOf(sequence)
-}
-
-/**
- * Whether the shadowed range covers surface node 0 while it holds the system prompt.
- * The session refuses such a replacement unless the writer is a `system/message`
- * over exactly that node, so DCP pre-checks and refuses with a clear message.
- * @param session - session to read.
- * @param startSeq - inclusive range start.
- * @returns true when the range must be refused.
- */
-export function coversSystemHead(session: Session, startSeq: number): boolean {
-  const nodes = session.surface.nodes
-  const head = nodes[0]
-  if (head === undefined || head !== seq(startSeq)) return false
-  return session.eventAt(head)?.type === 'system/message'
-}
-
-/**
- * The current open turn number, as derived by the projection.
- * @param turn - the projection's open-turn value.
- * @param fallback - value to use when no turn is open.
- * @returns a turn number.
- */
-export function requireTurn(turn: number | null, fallback = 0): number {
-  return turn ?? fallback
-}
-
-/** Re-export the branding helper so callers do not import the session package twice. */
-export { seq as brandSeq }
 export type { SessionSeq }

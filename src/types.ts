@@ -66,10 +66,6 @@ export interface DcpBlockState {
   consumed: string[]
   /** Set on a block once a later block absorbed it. */
   consumedBy?: string
-  /** The user asked `/dcp-compact decompress` for this block. */
-  deactivatedByUser?: boolean
-  /** Seq of the rehydrating replacement, when one was written. */
-  rehydratedSeq?: number
 }
 
 /** One `compact` tool call awaiting its transaction, for topic correlation. */

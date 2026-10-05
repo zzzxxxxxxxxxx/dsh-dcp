@@ -45,7 +45,9 @@ import { trace } from './trace.ts'
 import { DCP_SOURCE } from './source.ts'
 import type { LoadedPrompts } from './prompts/index.ts'
 import { SessionMutex, runStrategies } from './runner.ts'
-import { findBlock, recallBlock } from './recall.ts'
+import { findBlock, recallBlock, recallPruned } from './recall.ts'
+import type { RecallResult } from './recall.ts'
+import { isPruned } from './prune.ts'
 import { nudgeVerdict, readPressure, type Pressure } from './nudges.ts'
 
 /** Cordis plugin name, used for fiber diagnostics. */
@@ -510,8 +512,7 @@ function buildEntries(
     const shadowed = nodes.slice(from, to + 1)
 
     const blocksInRange = state.blocks.filter(
-      (block) => block.consumedBy === undefined && block.deactivatedByUser !== true
-        && shadowed.includes(block.seq),
+      (block) => block.consumedBy === undefined && shadowed.includes(block.seq),
     )
     const bodies = new Map<string, string>()
     for (const block of blocksInRange) {
@@ -630,7 +631,7 @@ function renderTargets(
   omitted: number,
 ): string {
   const lines: string[] = []
-  const active = state.blocks.filter((block) => block.consumedBy === undefined && block.deactivatedByUser !== true)
+  const active = state.blocks.filter((block) => block.consumedBy === undefined)
   if (active.length > 0) {
     lines.push('Existing summaries (reference one as (bN) when your range covers it):')
     for (const block of active) {
@@ -843,14 +844,16 @@ export function recallTool(rt: PluginRuntime): ToolDefinition {
   return defineTool({
     name: 'recall',
     description: [
-      'Read back the original content a compaction removed, without changing the conversation.',
+      'Read back the original content a compaction or a prune removed, without changing the conversation.',
       'Pass the block handle a compaction reported (b1, b2, …) — compact_targets lists the current ones.',
+      'Pass a node handle (n123) to read back a tool output that deduplication replaced with a placeholder;',
+      'compact_targets lists those too, and a placeholder preview marks one as pruned.',
       'Pass an optional query to get only the lines matching it, which is usually all you need and always cheaper.',
       'A long body comes back in pages; when the answer says it was truncated, call again with the offset it names.',
       'Use it when a summary you are relying on turns out to be missing a detail you now need.',
     ].join('\n'),
     parameters: {
-      block: { type: 'string', required: true, description: 'Block handle, e.g. b2.' },
+      block: { type: 'string', required: true, description: 'Block handle (b2) or pruned node handle (n123).' },
       query: { type: 'string', description: 'Optional case-insensitive line filter.' },
       offset: { type: 'integer', description: 'Character offset to start from, for a truncated body.' },
     },
@@ -887,17 +890,92 @@ export function recallTool(rt: PluginRuntime): ToolDefinition {
       if (agent === undefined) throw new Error('recall requires an owning agent session')
       const session = agent.session
       const state = rt.stateOf(session)
-      const block = findBlock(state, args.block)
-      if (block === undefined) {
-        const available = state.blocks.length === 0
-          ? 'No compaction has run in this session yet.'
-          : `Known blocks: ${state.blocks.map((item) => item.id).join(', ')}.`
-        return { found: false, text: `Unknown block ${JSON.stringify(args.block)}. ${available}`, chars: 0, truncated: false, nodes: 0 }
-      }
-      const result = recallBlock(session, state, block, args.query, args.offset ?? 0)
+      const result = recallTarget(session, state, args.block, args.query, args.offset ?? 0)
       return { found: result.found, text: result.text, chars: result.chars, truncated: result.truncated, nodes: result.nodes }
     },
   })
+}
+
+/**
+ * Resolve one `recall` handle, then read what it hides.
+ *
+ * Two handle families reach the same readback. A compaction block is named
+ * `bN`; a node deduplication pruned is named `n<seq>`, the surface handle
+ * `compact_targets` already prints. A bare number stays a block first, so
+ * `recall 2` keeps meaning `b2`, and only falls through to a node when no such
+ * block exists.
+ *
+ * Both families end at {@link recallPruned} or {@link recallBlock}, which walk
+ * the same replacement chain — the readback never depended on the content
+ * having been removed by a compaction.
+ *
+ * @param session - the calling agent's session.
+ * @param state - derived DCP state.
+ * @param handle - the model-supplied handle.
+ * @param query - optional case-insensitive line filter.
+ * @param offset - character offset to start from, for a paged body.
+ * @returns the rendered body and its accounting.
+ */
+function recallTarget(
+  session: Session,
+  state: DcpState,
+  handle: string,
+  query: string | undefined,
+  offset: number,
+): RecallResult {
+  const block = findBlock(state, handle)
+  if (block !== undefined) return recallBlock(session, state, block, query, offset)
+
+  const normalized = handle.trim().toLowerCase().replace(/^\(|\)$/g, '')
+  const seq = /^n(\d+)$/.exec(normalized)?.[1] ?? /^(\d+)$/.exec(normalized)?.[1]
+  if (seq !== undefined) {
+    const sequence = Number(seq)
+    // Only a node that actually lost content is addressable: without the check,
+    // `recall n5` on any message would answer "no recoverable content", which
+    // reads as "that message is empty" rather than "nothing was removed here".
+    if (isPruned(session, sequence)) return recallPruned(session, state, sequence, query, offset)
+    return {
+      found: false,
+      text: `n${sequence} is not a pruned node. ${describeRecallTargets(session, state)}`,
+      chars: 0,
+      truncated: false,
+      nodes: 0,
+    }
+  }
+
+  // A block-shaped handle that matched nothing is reported as a missing block,
+  // not as a missing handle: "Unknown block b7" says which list to look in.
+  const blockShaped = /^b?\d+$/.test(normalized)
+  return {
+    found: false,
+    text: `${blockShaped ? 'Unknown block' : 'Unknown handle'} ${JSON.stringify(handle)}. ${describeRecallTargets(session, state)}`,
+    chars: 0,
+    truncated: false,
+    nodes: 0,
+  }
+}
+
+/**
+ * Name every handle `recall` would accept right now.
+ *
+ * The pruned nodes have no other listing: they live on the surface as ordinary
+ * tool results, so a reader who did not memorise a sequence has no way to ask
+ * for one. Naming them in the failure is what makes the feature discoverable
+ * without a second tool.
+ *
+ * @param session - session whose surface is scanned.
+ * @param state - derived DCP state.
+ * @returns one line naming the known blocks and pruned nodes.
+ */
+function describeRecallTargets(session: Session, state: DcpState): string {
+  const blocks = state.blocks.length === 0
+    ? 'No compaction has run in this session yet.'
+    : `Known blocks: ${state.blocks.map((item) => item.id).join(', ')}.`
+  const pruned = surfaceSeqs(session).filter((sequence) => isPruned(session, sequence))
+  const nodes = pruned.length === 0
+    ? 'No tool output has been pruned in this session.'
+    : `Pruned nodes: ${pruned.map((sequence) => `n${sequence}`).join(', ')}.`
+  return `${blocks} ${nodes}`
 }
 
 /**

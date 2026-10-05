@@ -215,6 +215,54 @@ describe('errored output', () => {
     expect(text.some((item) => item.includes('ENOENT: no such file missing.ts'))).toBe(false)
     expect(text.some((item) => item.includes(PRUNE_OUTPUT_PLACEHOLDER))).toBe(true)
   })
+
+  it('does not let a repeated failure supersede an earlier success', () => {
+    // A newer FAILURE is different evidence from an older SUCCESS, so it does
+    // not supersede it. A pruned node has no recall path (only compaction
+    // blocks are addressable), so pruning here would lose the only good output
+    // the group ever produced after one transient failure.
+    const session = Session.create('dedup-failure-vs-success' as never)
+    build(session, [
+      { name: 'bash', args: '{"command":"npm test"}', result: 'all green' },
+      { name: 'bash', args: '{"command":"npm test"}', result: 'ETIMEDOUT', isError: true },
+    ])
+
+    expect(runStrategies(session, deps({}, 9)).pruned).toBe(0)
+    const text = texts(session)
+    expect(text.some((item) => item.includes('all green'))).toBe(true)
+    expect(text.some((item) => item.includes('ETIMEDOUT'))).toBe(true)
+    expect(text.some((item) => item.includes(PRUNE_OUTPUT_PLACEHOLDER))).toBe(false)
+  })
+
+  it('still supersedes stale successes when the newest result failed', () => {
+    // The newest success survives next to the newest failure, but the
+    // repetitions older than that success are still stale and still go.
+    const session = Session.create('dedup-failure-keeps-newest-success' as never)
+    build(session, [
+      { name: 'bash', args: '{"command":"npm test"}', result: 'first green' },
+      { name: 'bash', args: '{"command":"npm test"}', result: 'second green' },
+      { name: 'bash', args: '{"command":"npm test"}', result: 'ETIMEDOUT', isError: true },
+    ])
+
+    expect(runStrategies(session, deps({}, 9)).pruned).toBe(1)
+    const text = texts(session)
+    expect(text.some((item) => item.includes('second green'))).toBe(true)
+    expect(text.some((item) => item.includes('ETIMEDOUT'))).toBe(true)
+    expect(text.some((item) => item.includes('first green'))).toBe(false)
+  })
+
+  it('lets a newest success supersede an earlier failure', () => {
+    const session = Session.create('dedup-success-supersedes-failure' as never)
+    build(session, [
+      { name: 'bash', args: '{"command":"npm test"}', result: 'ETIMEDOUT', isError: true },
+      { name: 'bash', args: '{"command":"npm test"}', result: 'green on retry' },
+    ])
+
+    expect(runStrategies(session, deps({}, 9)).pruned).toBe(1)
+    const text = texts(session)
+    expect(text.some((item) => item.includes('green on retry'))).toBe(true)
+    expect(text.some((item) => item.includes('ETIMEDOUT'))).toBe(false)
+  })
 })
 
 describe('strategiesAllowed', () => {

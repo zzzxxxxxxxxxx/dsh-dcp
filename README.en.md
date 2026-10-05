@@ -24,7 +24,7 @@
 
 Every piece of state is derived by folding the session log: apart from the optional prompt-override files, the plugin keeps nothing on the side and adds no session event type. Pruned and compacted originals stay in the log.
 
-Inspired by [opencode-dcp](https://github.com/Tarquinen/opencode-dynamic-context-pruning); licensed AGPL-3.0 (see `LICENSE`).
+Inspired by [opencode-dcp](https://github.com/Opencode-DCP/opencode-dynamic-context-pruning); licensed AGPL-3.0 (see `LICENSE`, third-party attribution in `NOTICE`).
 
 ## Install
 
@@ -121,6 +121,6 @@ A few semantics:
 - A percentage threshold needs the route to report a context window; when it reports none, nothing nudges — the plugin does not fall back to a fixed token count.
 - All three protection lists reach deduplication: naming a tool in `compaction.protectedTools`, `commands.protectedTools` or `strategies.deduplication.protectedTools` keeps its older outputs from being rewritten (`commands`' default list is what exempts `write`/`edit`).
 - `protectedFilePatterns` governs both deduplication and compaction: matching calls are never rewritten, and their bodies are kept in a summary's appendix. Globs are fail-open: a value over 8192 characters, a pattern over 4096 characters, or a match running past 1,048,576 steps counts as "no match" — that loses protection, never adds it; collecting the paths one call declared scans at most 10,000 nodes.
-- With `experimental.customPrompts` on, `$DSH_HOME/dcp-prompts/overrides/<name>.md` overrides 4 prompts (`compact`, `compact-targets`, `context-limit-nudge`, `turn-nudge`); the "not a message from the user" prefix on a nudge is restored at load time and cannot be removed. The switch and the override files apply **immediately** — no restart.
+- With `experimental.customPrompts` on, `$DSH_HOME/dcp-prompts/overrides/<name>.md` overrides 4 prompts (`compact`, `compact-targets`, `context-limit-nudge`, `turn-nudge`); the plugin also seeds the built-in texts to `$DSH_HOME/dcp-prompts/defaults/<name>.md` as **reference copies** — `defaults/` is never loaded, it exists for comparison, and the whole directory is re-seeded if it is missing; the "not a message from the user" prefix on a nudge is restored at load time and cannot be removed. The switch and the override files apply **immediately** — no restart.
 - Debug switch `DSH_DCP_TRACE`: point it at a file path and the plugin appends one line per decision (why a reminder fired, why one was skipped and on which inputs, whether delivery landed, whether a config or prompt reload really happened, what each automatic pass pruned). Unset, it writes nothing at all — with tracing off the plugin leaves no files behind. For host logs (every plugin, not just DCP) use [`dsh-logger-panel`](https://github.com/LingLambda/dsh-logger-panel).
 - This plugin is young and may still have bugs. Please report problems in [Issues](https://github.com/zzzxxxxxxxxxx/dsh-dcp/issues) and **attach the log produced by `DSH_DCP_TRACE`** — it spells out the decision path far better than the transcript does.

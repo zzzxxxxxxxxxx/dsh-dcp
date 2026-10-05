@@ -155,7 +155,7 @@ describe('enumerateTargets', () => {
     expect(at(enumerateTargets(short, []).targets, 0).preview).toBe('only this')
   })
 
-  it('labels a live summary node and never one that was absorbed or retired', () => {
+  it('labels a live summary node and never one that was absorbed', () => {
     const session = Session.create('boundaries-blocks' as never)
     buildConversation(session, 1)
     const seq = at(nodes(session), 0)
@@ -163,9 +163,8 @@ describe('enumerateTargets', () => {
     expect(at(enumerateTargets(session, [block('b1', seq)]).targets, 0).block).toBe('b1')
     // An absorbed block is not offered as a referenceable summary any more.
     expect(at(enumerateTargets(session, [block('b1', seq, { consumedBy: 'b2' })]).targets, 0).block).toBeUndefined()
-    // Neither is one the user retired, and a retired block must not shadow the
-    // label of a live block sharing its seq.
-    expect(at(enumerateTargets(session, [block('b1', seq, { deactivatedByUser: true })]).targets, 0).block).toBeUndefined()
+    // Neither must an absorbed block shadow the label of a live block at the
+    // same seq.
     expect(at(enumerateTargets(session, [block('b1', seq), block('b2', seq, { consumedBy: 'b9' })]).targets, 0).block).toBe('b1')
   })
 

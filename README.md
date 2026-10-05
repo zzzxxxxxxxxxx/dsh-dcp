@@ -24,7 +24,7 @@
 
 所有状态都从会话日志折叠派生：除可选的提示词覆盖文件外，插件不写任何旁挂状态，也不新增会话事件类型；被裁剪与被压缩的原文仍留在日志里。
 
-思路来自 [opencode-dcp](https://github.com/Tarquinen/opencode-dynamic-context-pruning)；以 AGPL-3.0 授权（见 `LICENSE`）。
+思路来自 [opencode-dcp](https://github.com/Opencode-DCP/opencode-dynamic-context-pruning)；以 AGPL-3.0 授权（见 `LICENSE`，第三方归属见 `NOTICE`）。
 
 ## 安装
 
@@ -121,6 +121,6 @@ dsh plugin --profile <profile> add github:zzzxxxxxxxxxx/dsh-dcp
 - 百分比阈值需要路由上报 context window；上报不了就不提醒，不会退化成固定 token 数。
 - 三张「受保护工具」表都会被去重读取：写进 `compaction.protectedTools`、`commands.protectedTools` 或 `strategies.deduplication.protectedTools` 中任意一张，该工具的旧输出都不会被自动改写（`commands` 的默认表因此让 `write`/`edit` 天然免疫去重）。
 - `protectedFilePatterns` 同时作用于去重与压缩：命中的调用不会被改写，压缩时其正文进摘要附录。glob 是 fail-open 的：单个待匹配值超过 8192 字符、单条 pattern 超过 4096 字符，或匹配步数超过 1 048 576，一律按「不匹配」处理——后果是少保护，不会多保护；收集一次调用声明的路径时最多扫描 10000 个节点。
-- `experimental.customPrompts` 打开后，可用 `$DSH_HOME/dcp-prompts/overrides/<name>.md` 覆盖 4 份提示词（`compact`、`compact-targets`、`context-limit-nudge`、`turn-nudge`）；nudge 的「这不是用户发言」前缀由插件在载入时补回，删不掉。开关与覆盖文件的改动**即时生效**，无需重启。
+- `experimental.customPrompts` 打开后，可用 `$DSH_HOME/dcp-prompts/overrides/<name>.md` 覆盖 4 份提示词（`compact`、`compact-targets`、`context-limit-nudge`、`turn-nudge`）；同时插件会把内置文本播种到 `$DSH_HOME/dcp-prompts/defaults/<name>.md` 作为**参考副本**——`defaults/` 不参与加载，只供对照，整个目录不存在时会重新播种；nudge 的「这不是用户发言」前缀由插件在载入时补回，删不掉。开关与覆盖文件的改动**即时生效**，无需重启。
 - 排障开关 `DSH_DCP_TRACE`：设成文件路径后，插件把每次判定按行追加进去（为什么提醒、为什么跳过及其输入、投递结果、配置与提示词是否真的重载、每回合自动清理的产出）。不设就一个字节都不写；没开 trace 时插件不留任何文件。宿主日志（所有插件，不止 DCP）用 [`dsh-logger-panel`](https://github.com/LingLambda/dsh-logger-panel) 看。
 - 本插件仍在早期，可能还有 bug。遇到问题请到 [Issues](https://github.com/zzzxxxxxxxxxx/dsh-dcp/issues) 反馈，并**附上 `DSH_DCP_TRACE` 生成的日志**——它把判定过程写得比会话记录清楚得多。

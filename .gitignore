@@ -1,6 +1,7 @@
 node_modules/
 lib/
 *.log
+*.tgz
 .DS_Store
 
 # Transient build staging (scripts/build.mjs): holds lib-staging/ and the

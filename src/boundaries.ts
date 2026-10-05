@@ -54,7 +54,7 @@ export function enumerateTargets(
   const nodes = surfaceSeqs(session)
   const blockBySeq = new Map<number, string>()
   for (const block of blocks) {
-    if (block.consumedBy === undefined && block.deactivatedByUser !== true) {
+    if (block.consumedBy === undefined) {
       blockBySeq.set(block.seq, block.id)
     }
   }

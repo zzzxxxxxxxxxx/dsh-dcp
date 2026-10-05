@@ -1,0 +1,11 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "checkJs": true,
+    "strict": false,
+    "noImplicitAny": false,
+    "noUncheckedIndexedAccess": false,
+    "types": []
+  },
+  "include": ["src/client/**/*.js", "src/client/**/*.d.ts"]
+}

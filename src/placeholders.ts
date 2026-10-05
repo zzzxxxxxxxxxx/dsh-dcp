@@ -14,23 +14,6 @@ import { SUMMARY_HEADER } from './types.ts'
 /** Matches one `(bN)` placeholder; `N` is the block's ordinal. */
 const PLACEHOLDER = /\(b(\d+)\)/g
 
-/**
- * List the block ids a summary references, in first-appearance order.
- * @param text - the model-supplied summary.
- * @returns distinct block ids, duplicated references collapsed.
- */
-export function parsePlaceholders(text: string): string[] {
-  const found: string[] = []
-  const seen = new Set<string>()
-  for (const match of text.matchAll(PLACEHOLDER)) {
-    const id = `b${match[1]}`
-    if (seen.has(id)) continue
-    seen.add(id)
-    found.push(id)
-  }
-  return found
-}
-
 /** The placeholder validation outcome for one summary. */
 export interface PlaceholderCheck {
   /** Required blocks the summary referenced exactly once. */

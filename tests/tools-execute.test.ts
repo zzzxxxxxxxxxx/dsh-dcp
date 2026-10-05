@@ -19,7 +19,8 @@ import { apply, compactTool, recallTool, targetsTool } from '../src/index.ts'
 import type { PluginRuntime } from '../src/index.ts'
 import { Config as ConfigSchema, resolveConfig } from '../src/config.ts'
 import type { Config } from '../src/config.ts'
-import { SessionMutex } from '../src/runner.ts'
+import { SessionMutex, runStrategies } from '../src/runner.ts'
+import { isPruned } from '../src/prune.ts'
 import { loadPrompts } from '../src/prompts/index.ts'
 import { applyDcpEvent } from '../src/projection.ts'
 import { initialDcpState } from '../src/types.ts'
@@ -600,6 +601,68 @@ describe('compact_targets and recall execute', () => {
     expect(unknown.found).toBe(false)
     expect(unknown.text).toContain('Unknown block "b7"')
     expect(unknown.text).toContain('Known blocks: b1.')
+  })
+
+  it('reads back a tool output that deduplication pruned, by its node handle', async () => {
+    // Deduplication replaces an older repeated output with a placeholder and
+    // that node is inside no compaction block, so `recall bN` could never reach
+    // it: the content was removed with no way back. The original is still in the
+    // log and the replacement chain still cites it, so the node handle is all
+    // that was missing.
+    const session = Session.create('recall-pruned' as never)
+    pushRound(session, 0, { args: '{"path":"same.ts"}', resultText: 'the original body' })
+    pushRound(session, 1, { args: '{"path":"same.ts"}', resultText: 'the newer body' })
+
+    // Turn 9 against calls made in turn 1: far past turn protection, so the
+    // pass actually reaches them (the same clock the strategy tests use).
+    const pass = runStrategies(session, {
+      config: resolveConfig(ConfigSchema({})),
+      stateOf: () => ({ ...fold(session), turn: 9 }),
+      priceOf: () => () => 7,
+      declaredPaths: () => [],
+    })
+    expect(pass.pruned).toBe(1)
+
+    const prunedSeq = nodes(session).find((seq) => isPruned(session, seq))
+    expect(prunedSeq).toBeDefined()
+    const rt = runtimeFor(session)
+
+    const value = await runRecall(rt, { block: handle(prunedSeq as number) }, session)
+    expect(value.found).toBe(true)
+    expect(value.text).toContain('the original body')
+    // The surviving repetition is a different node and must not be what came back.
+    expect(value.text).not.toContain('the newer body')
+    expect(value.text).toContain(`n${prunedSeq} · original content of a pruned node`)
+  })
+
+  it('names the pruned nodes when a node handle is not pruned, and filters one by query', async () => {
+    const session = Session.create('recall-pruned-errors' as never)
+    pushRound(session, 0, { args: '{"path":"same.ts"}', resultText: 'the original body' })
+    pushRound(session, 1, { args: '{"path":"same.ts"}', resultText: 'the newer body' })
+    runStrategies(session, {
+      config: resolveConfig(ConfigSchema({})),
+      stateOf: () => ({ ...fold(session), turn: 9 }),
+      priceOf: () => () => 7,
+      declaredPaths: () => [],
+    })
+    const rt = runtimeFor(session)
+    const prunedSeq = nodes(session).find((seq) => isPruned(session, seq)) as number
+
+    // A surface node that lost nothing must say so, not answer "no content".
+    const intact = nodes(session).find((seq) => !isPruned(session, seq)) as number
+    const notPruned = await runRecall(rt, { block: handle(intact) }, session)
+    expect(notPruned.found).toBe(false)
+    expect(notPruned.text).toContain(`n${intact} is not a pruned node.`)
+    // The failure is the listing: a pruned node has no other way to be named.
+    expect(notPruned.text).toContain(`Pruned nodes: n${prunedSeq}.`)
+
+    const filtered = await runRecall(rt, { block: handle(prunedSeq), query: 'original' }, session)
+    expect(filtered.found).toBe(true)
+    expect(filtered.text).toContain('the original body')
+
+    const noMatch = await runRecall(rt, { block: handle(prunedSeq), query: 'absent-line' }, session)
+    expect(noMatch.found).toBe(false)
+    expect(noMatch.text).toContain('contains no line matching')
   })
 
   it('refuses every tool that needs an owning agent', async () => {

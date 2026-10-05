@@ -18,17 +18,20 @@
  * arguments it could not use and discarded the only diagnosis the model had,
  * for a failure it could not otherwise recover. That strategy is gone.
  *
- * Deduplication is a different rule and deliberately ignores `isError`: it keys
- * on the call signature (`name` + normalized arguments), so two identical calls
- * are one repeated call and the older repetition is superseded whether it
- * succeeded or failed. Each signature's newest result always survives with its
- * error text and `isError` flag intact; only the stale repetition is replaced.
- * The residual cost is a repeated pair whose failures differ (transient vs
- * permanent): the older diagnosis is elided, only the newer one remains.
+ * Deduplication is a different rule: it keys on the call signature (`name` +
+ * normalized arguments), so two identical calls are one repeated call and the
+ * older repetition is superseded. The newest result always survives with its
+ * error text and `isError` flag intact; and when that newest result FAILED, the
+ * newest earlier SUCCESS survives alongside it, because the two are different
+ * evidence — a failure does not supersede a success, and a pruned node has no
+ * recall path, so eliding it would lose the only good output the group had.
+ * Two residual costs remain, both deliberate: a repeated pair whose failures
+ * differ (transient vs permanent) still elides the older diagnosis, and a
+ * repeated successful pair whose outputs differ still elides the older output.
  *
  * @module dsh-dcp/strategies
  */
-import type { Session, SessionEvent } from '@deepseek-ai/dsh-session'
+import type { Session } from '@deepseek-ai/dsh-session'
 import type { Config } from '../config.ts'
 import { manualFor } from '../config.ts'
 import { collectFilePaths, isProtected, matchesAny } from '../protected.ts'
@@ -49,8 +52,9 @@ export interface ToolPair {
   /**
    * Whether the call failed.
    *
-   * Factual, not a filter: deduplication keys on the call signature and prunes
-   * the older repetition regardless of this flag (see the module note).
+   * Deduplication keys on the call signature, not on this flag; it reads the
+   * flag only to decide whether a newer repetition may supersede an older one
+   * (a failure may not supersede a success — see the module note).
    */
   isError: boolean
   /** Model-visible text of the result. */
@@ -229,7 +233,27 @@ export function deduplicationCandidates(
   const candidates: Candidate[] = []
   for (const group of bySignature.values()) {
     if (group.length < 2) continue
-    for (const pair of group.slice(0, -1)) {
+    const newest = group[group.length - 1]
+    if (newest === undefined) continue
+    // The newest repetition survives. It supersedes the older ones only when
+    // they are the same kind of evidence: a FAILURE does not supersede an
+    // earlier SUCCESS, so when the newest result errored and some earlier
+    // repetition succeeded, that newest success survives too. Otherwise a
+    // transient failure would silently elide the only good output the group
+    // ever produced — and a pruned node has no recall path (only compaction
+    // blocks are addressable), so the information would be gone for good.
+    const survivors = new Set<ToolPair>([newest])
+    if (newest.isError) {
+      for (let index = group.length - 2; index >= 0; index -= 1) {
+        const pair = group[index]
+        if (pair !== undefined && !pair.isError) {
+          survivors.add(pair)
+          break
+        }
+      }
+    }
+    for (const pair of group) {
+      if (survivors.has(pair)) continue
       candidates.push({
         seq: pair.resultSeq,
         tokens: price(pair.resultSeq),
@@ -259,11 +283,6 @@ export function strategiesAllowed(config: Config, state: DcpState): boolean {
   // split the configuration offers.
   if (manualFor(config) && config.manualMode?.automaticStrategies === false) return false
   return true
-}
-
-/** Whether one event is the end of a turn. */
-export function isTurnEnd(event: SessionEvent): boolean {
-  return event.type === 'turn/end'
 }
 
 export { matchesAny }

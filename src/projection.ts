@@ -8,9 +8,11 @@
  * when a later checkpoint's replacement shadows that seq; a message is inside
  * an active block when its seq is listed in that block's `shadowed` span.
  *
- * The unit is host-only (`wire` omitted): the browser half reads what it needs
- * through the conversation rows DSH already renders, so there is no client
- * contract to keep in step.
+ * The unit publishes the host fold together with a `wire` view: the browser
+ * half renders the composer pill from it (`props.useProjection`), so the two
+ * halves share one contract for the block/prune/token readout instead of the
+ * client re-deriving it from conversation rows. That view is a deliberate
+ * subset — the panel shows counts, not the shadowed text.
  *
  * @module dsh-dcp/projection
  */
@@ -33,9 +35,9 @@ export interface DcpWireView {
   /**
    * Blocks a later compaction absorbed.
    *
-   * A block the user retired (`/dcp-compact decompress`) is not counted here: it
-   * left the panel for the opposite reason, and reporting it as absorbed said a
-   * user's own decompression had been folded into a summary.
+   * Counted separately from the active blocks because they left the panel for a
+   * different reason: their body was folded into a newer summary rather than
+   * staying available.
    */
   absorbed: number
   /** Model-free prunes written by the strategies. */
@@ -80,8 +82,6 @@ const blockSchema = z.object({
   endId: z.string().optional(),
   consumed: z.array(z.string()),
   consumedBy: z.string().optional(),
-  deactivatedByUser: z.boolean().optional(),
-  rehydratedSeq: z.number().optional(),
 })
 
 const liveSchema = z.object({ compactionId: z.string(), turn: z.number().nullable() })
@@ -392,27 +392,12 @@ export function applyDcpEvent(state: DcpState, event: SessionEvent): DcpState {
   }
 }
 
-/** Fold one user message: a checkpoint that opens a block, a rehydration, or a notice. */
+/** Fold one user message: a checkpoint that opens a block, or a notice. */
 function applyUserMessage(state: DcpState, event: SessionEvent): DcpState {
   const source = messageSource(event)
   if (source === undefined) return state
 
   if (source['kind'] === 'dsh-dcp') {
-    const rehydrates = source['rehydrates']
-    if (typeof rehydrates === 'string') {
-      const blocks = state.blocks.map((block) =>
-        block.id === rehydrates ? { ...block, deactivatedByUser: true, rehydratedSeq: event.seq as number } : block)
-      return { ...state, blocks }
-    }
-    const recompresses = source['recompresses']
-    if (typeof recompresses === 'string') {
-      const blocks = state.blocks.map((block) => {
-        if (block.id !== recompresses) return block
-        const { deactivatedByUser: _dropped, rehydratedSeq: _seq, ...rest } = block
-        return rest
-      })
-      return { ...state, blocks }
-    }
     // Every DCP-authored message is a notice for the panel, but only a nudge may
     // move the reminder anchor. A prune announcement used to reset the spacing to
     // its own seq, so in a session whose dedup pass reports every few turns the
@@ -529,10 +514,9 @@ export function dcpWireView(state: DcpState): DcpWireView {
   const cached = viewCache.get(state)
   if (cached !== undefined) return cached
   const blocks = state.blocks
-    // Same two filters as `enumerateTargets` and `renderTargets`: a block a
-    // later compaction absorbed, or one the user retired, is not something the
-    // panel should still offer as active.
-    .filter((block) => block.consumedBy === undefined && block.deactivatedByUser !== true)
+    // Same filter as `enumerateTargets`: a block a later compaction absorbed is
+    // not something the panel should still offer as active.
+    .filter((block) => block.consumedBy === undefined)
     .map((block) => ({
       id: block.id,
       from: block.spanStart,
@@ -543,10 +527,8 @@ export function dcpWireView(state: DcpState): DcpWireView {
     }))
   const view: DcpWireView = {
     blocks,
-    // Two different fates, one of which is not absorption. A block consumed by a
-    // later compaction had its body folded into that block's summary; a block the
-    // user retired was decompressed, and counting the two together told the panel
-    // that a user's own decompression had been "absorbed".
+    // Reported separately from the active blocks: an absorbed block's body was
+    // folded into the newer summary rather than staying available on its own.
     absorbed: state.blocks.filter((block) => block.consumedBy !== undefined).length,
     prunes: state.pruneCount,
     prunedTokens: state.prunedTokens,
